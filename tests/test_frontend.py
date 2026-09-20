@@ -20,6 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from web import server as web_server
 
 STATIC = Path(__file__).resolve().parents[1] / "web" / "static"
@@ -194,6 +196,33 @@ class TestCssVariables(unittest.TestCase):
         body_block = re.search(r"\nbody\s*\{([^}]*)\}", CSS_RULES)
         self.assertIsNotNone(body_block)
         self.assertIn("background", body_block.group(1))
+
+
+class TestDeployedCopy(unittest.TestCase):
+    """pfkfks-main 에 복사해 둔 화면이 원본과 같은지.
+
+    화면을 고치고 `scripts/deploy_web.py` 돌리는 걸 잊으면, 로컬은 새 화면인데
+    pfkfks.org/fm24 는 옛 화면이 된다. 조용히 어긋나므로 여기서 잡는다.
+    pfkfks-main 저장소가 옆에 없으면 건너뛴다.
+    """
+
+    def setUp(self) -> None:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+        import deploy_web  # noqa: PLC0415
+
+        self.deploy_web = deploy_web
+        if not deploy_web.DEFAULT_TARGET.is_dir():
+            self.skipTest(f"배포 폴더가 없습니다: {deploy_web.DEFAULT_TARGET}")
+
+    def test_deployed_copy_is_up_to_date(self) -> None:
+        added, changed, removed = self.deploy_web.plan(
+            self.deploy_web.SOURCE, self.deploy_web.DEFAULT_TARGET
+        )
+        self.assertEqual(
+            (added, changed, removed),
+            ([], [], []),
+            "web/static 과 배포본이 다릅니다. `python scripts/deploy_web.py` 를 실행하세요.",
+        )
 
 
 class TestRoleLabels(unittest.TestCase):

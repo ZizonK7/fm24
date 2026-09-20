@@ -20,7 +20,6 @@ pfkfks.org는 Firebase Hosting으로 서비스되고, **Hosting 배포는 사이
 from __future__ import annotations
 
 import argparse
-import filecmp
 import shutil
 import sys
 from pathlib import Path
@@ -35,6 +34,21 @@ DEFAULT_TARGET = PROJECT_ROOT.parent / "pfkfks-main" / "public" / "fm24"
 
 #: 복사할 확장자. 다른 게 섞여 들어가면 조용히 배포되므로 화이트리스트로 둔다.
 ALLOWED_SUFFIXES = {".html", ".js", ".css", ".svg", ".ico", ".png", ".webp"}
+
+#: 개행을 무시하고 비교할 텍스트 확장자.
+TEXT_SUFFIXES = {".html", ".js", ".css", ".svg"}
+
+
+def same_content(left: Path, right: Path) -> bool:
+    """두 파일의 내용이 같은가. 텍스트는 개행 차이를 무시한다.
+
+    pfkfks-main 은 Windows에서 git이 체크아웃하며 CRLF로 바꾸고, 여기 원본은
+    LF다. 바이트로 비교하면 매번 "다름"이 나오지만 실제 내용은 같다.
+    """
+    left_bytes, right_bytes = left.read_bytes(), right.read_bytes()
+    if left.suffix in TEXT_SUFFIXES:
+        return left_bytes.replace(b"\r\n", b"\n") == right_bytes.replace(b"\r\n", b"\n")
+    return left_bytes == right_bytes
 
 
 def plan(source: Path, target: Path) -> tuple[list[Path], list[Path], list[Path]]:
@@ -58,7 +72,7 @@ def plan(source: Path, target: Path) -> tuple[list[Path], list[Path], list[Path]
     removed = sorted(existing - wanted)
     changed = sorted(
         name for name in (wanted & existing)
-        if not filecmp.cmp(source / name, target / name, shallow=False)
+        if not same_content(source / name, target / name)
     )
     return added, changed, removed
 
