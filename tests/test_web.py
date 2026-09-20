@@ -273,6 +273,44 @@ class TestQueryEndpoints(WebTestCase):
         self.assertEqual(row["origin"], "youth")
         self.assertTrue(row["manual_origin"])
 
+    def test_position_choices_persist_and_change_recommendation(self) -> None:
+        before = self.get("/api/squad?date=2028-01-10")
+        row = next(p for p in before["players"] if p["player_id"] == "29221846")
+        self.assertFalse(row["manual_positions"])
+        self.post("/api/positions", {
+            "player_id": "29221846", "primary_position": "ST(C)",
+            "other_positions": ["AM(C)", "AM(R)"],
+        })
+        after = self.get("/api/squad?date=2028-01-10")
+        row = next(p for p in after["players"] if p["player_id"] == "29221846")
+        self.assertEqual(row["primary_position"], "ST(C)")
+        self.assertEqual(row["other_positions"], ["AM(C)", "AM(R)"])
+        self.assertTrue(row["manual_positions"])
+        self.assertEqual(row["group"], "ST")
+        self.assertEqual(after["recommendation"]["formation"], "4-2-3-1")
+        picks = [slot["player"]["player_id"] for squad in after["recommendation"]["squads"].values()
+                 for slot in squad if slot["player"]]
+        self.assertEqual(len(picks), len(set(picks)))
+        detail = self.get("/api/player?id=29221846")
+        self.assertEqual(detail["player"]["primary_position"], "ST(C)")
+
+        export = _fixtures.write_export(self.tmp_path, filename="later.html")
+        preview = self.upload(export)
+        self.post("/api/import", {"path": preview["path"], "game_date": "2028-06-01"})
+        later = self.get("/api/squad?date=2028-06-01")
+        row = next(p for p in later["players"] if p["player_id"] == "29221846")
+        self.assertEqual(row["primary_position"], "ST(C)")
+        self.assertEqual(row["group"], "ST")
+
+    def test_position_choices_validate_input(self) -> None:
+        for primary, others in (("invalid", []), ("GK", ["GK"]), ("GK", "ST")):
+            with self.subTest(primary=primary, others=others):
+                status, _ = self.post_expect_error("/api/positions", {
+                    "player_id": "29221846", "primary_position": primary,
+                    "other_positions": others,
+                })
+                self.assertEqual(status, 400)
+
 
 class TestApiLayerWithoutServer(unittest.TestCase):
     """HTTP 없이 api 모듈만 쓰는 경우 (빈 DB 등 경계 상황)."""

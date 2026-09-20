@@ -366,6 +366,27 @@ def _api_origin(handler: Handler) -> dict[str, Any]:
     return {"ok": True, "player_id": player_id, "origin": origin}
 
 
+def _api_positions(handler: Handler) -> dict[str, Any]:
+    payload = handler._read_json()
+    player_id = str(payload.get("player_id") or "")
+    primary = payload.get("primary_position")
+    others = payload.get("other_positions")
+    allowed = set(config.POSITION_GROUPS)
+    if not isinstance(primary, str) or primary not in allowed:
+        raise ApiError("올바른 주 포지션을 선택하세요.")
+    if not isinstance(others, list) or any(not isinstance(value, str) or value not in allowed for value in others):
+        raise ApiError("가능 포지션 목록이 올바르지 않습니다.")
+    if primary in others or len(others) != len(set(others)):
+        raise ApiError("주 포지션과 가능 포지션은 중복될 수 없습니다.")
+    with handler._connect() as conn:
+        if not player_id or database.get_player(conn, player_id) is None:
+            raise ApiError("선수를 찾을 수 없습니다.", 404)
+        database.set_player_positions(conn, player_id, primary, others)
+        conn.commit()
+        importer.recompute_all(conn)
+    return {"ok": True, "player_id": player_id, "primary_position": primary, "other_positions": others}
+
+
 def _api_recompute(handler: Handler) -> dict[str, Any]:
     with handler._connect() as conn:
         return importer.recompute_all(conn)
@@ -385,6 +406,7 @@ POST_ROUTES: dict[str, Callable[[Handler], Any]] = {
     "/api/import": _api_import,
     "/api/role": _api_role,
     "/api/origin": _api_origin,
+    "/api/positions": _api_positions,
     "/api/recompute": _api_recompute,
 }
 

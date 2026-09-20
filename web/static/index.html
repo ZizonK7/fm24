@@ -50,6 +50,16 @@
 </div>
 
 <main id="main" hidden>
+  <nav class="view-tabs" aria-label="화면 선택">
+    <button class="chip active" id="tab-players" type="button">선수 목록</button>
+    <button class="chip" id="tab-formation" type="button">추천 포메이션</button>
+  </nav>
+  <section id="formation-view" hidden>
+    <h2>추천 포메이션 <span class="muted">4-2-3-1</span></h2>
+    <p class="muted">선택한 시점의 전체 선수단을 기준으로 주전, 로테이션, 육성 스쿼드를 추천합니다. 선수는 세 스쿼드에서 중복되지 않습니다.</p>
+    <div id="formation-squads" class="formation-squads"></div>
+  </section>
+  <div id="players-view">
   <!-- ── 필터 ───────────────────────────────────────────── -->
   <section class="filters" id="filters">
     <div class="filter-group" role="group" aria-label="출신">
@@ -97,6 +107,7 @@
     </table>
     <p class="empty" id="squad-empty" hidden>조건에 맞는 선수가 없습니다.</p>
   </section>
+  </div>
 </main>
 
 <!-- ── 선수 상세 (오른쪽 패널) ─────────────────────────── -->

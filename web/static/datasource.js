@@ -84,6 +84,9 @@ const localSource = {
   import: (path, gameDate) => postJSON('/api/import', { path, game_date: gameDate }),
   setRole: (playerId, gameDate, role) => postJSON('/api/role', { player_id: playerId, game_date: gameDate, role }),
   setOrigin: (playerId, origin) => postJSON('/api/origin', { player_id: playerId, origin }),
+  setPositions: (playerId, primaryPosition, otherPositions) => postJSON('/api/positions', {
+    player_id: playerId, primary_position: primaryPosition, other_positions: otherPositions,
+  }),
   bundle: () => callApi('/api/bundle'),
   upload: async (file) => callApi(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
     method: 'POST',
@@ -142,6 +145,7 @@ const cloudSource = {
   import: notAvailable('데이터 불러오기'),
   setRole: notAvailable('역할 수정'),
   setOrigin: notAvailable('출신 수정'),
+  setPositions: notAvailable('포지션 수정'),
   bundle: notAvailable('내보내기'),
   upload: notAvailable('업로드'),
 };

@@ -1,0 +1,49 @@
+name: Publish FM24 screen
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - web/static/**
+      - scripts/deploy_web.py
+      - .github/workflows/deploy-site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-fm24-screen
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out FM24
+        uses: actions/checkout@v4
+
+      - name: Check out hosting repository
+        uses: actions/checkout@v4
+        with:
+          repository: ZizonK7/pfkfks-main
+          ref: main
+          path: site
+          ssh-key: ${{ secrets.PFKFKS_DEPLOY_KEY }}
+
+      - name: Copy screen files
+        run: python scripts/deploy_web.py --target site/public/fm24
+
+      - name: Commit and push screen update
+        shell: bash
+        run: |
+          git -C site add -A public/fm24
+          if git -C site diff --cached --quiet; then
+            echo "Screen files are already up to date."
+            exit 0
+          fi
+          git -C site config user.name "fm24-publisher[bot]"
+          git -C site config user.email "fm24-publisher@users.noreply.github.com"
+          git -C site commit -m "Update FM24 screen from $GITHUB_SHA"
+          git -C site pull --rebase origin main
+          git -C site push origin HEAD:main

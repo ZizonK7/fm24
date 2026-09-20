@@ -148,6 +148,13 @@ def ensure_schema(conn: sqlite3.Connection) -> list[str]:
             updated_at    TEXT
         );
 
+        CREATE TABLE IF NOT EXISTS player_positions (
+            player_id TEXT PRIMARY KEY REFERENCES players(player_id),
+            primary_position TEXT NOT NULL,
+            other_positions TEXT NOT NULL,
+            updated_at TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS snapshots (
             snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
             {columns_sql},
@@ -220,6 +227,33 @@ def ensure_schema(conn: sqlite3.Connection) -> list[str]:
     )
     conn.commit()
     return added
+
+
+def get_player_positions(conn: sqlite3.Connection, player_id: str) -> tuple[str, list[str]] | None:
+    row = conn.execute(
+        "SELECT primary_position, other_positions FROM player_positions WHERE player_id = ?",
+        (player_id,),
+    ).fetchone()
+    return (row["primary_position"], json.loads(row["other_positions"])) if row else None
+
+
+def positions_by_player(conn: sqlite3.Connection) -> dict[str, tuple[str, list[str]]]:
+    return {
+        row["player_id"]: (row["primary_position"], json.loads(row["other_positions"]))
+        for row in conn.execute("SELECT * FROM player_positions")
+    }
+
+
+def set_player_positions(
+    conn: sqlite3.Connection, player_id: str, primary: str, others: Sequence[str]
+) -> None:
+    conn.execute(
+        "INSERT INTO player_positions (player_id, primary_position, other_positions, updated_at)"
+        " VALUES (?, ?, ?, ?) ON CONFLICT(player_id) DO UPDATE SET"
+        " primary_position=excluded.primary_position, other_positions=excluded.other_positions,"
+        " updated_at=excluded.updated_at",
+        (player_id, primary, json.dumps(list(others)), _now()),
+    )
 
 
 def _migrate_snapshot_columns(conn: sqlite3.Connection) -> list[str]:

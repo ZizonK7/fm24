@@ -148,14 +148,17 @@ class CohortStats:
         rows = database.cohort_snapshots(conn, game_date)
         stats = cls.from_rows(rows)
         all_attributes = database.attributes_by_player(conn, game_date)
+        manual_positions = database.positions_by_player(conn)
 
         for row in rows:
             player_id = row["player_id"]
             attributes = all_attributes.get(player_id, {})
             if not attributes:
                 continue
-            for group in utils.position_groups(row["position"]):
-                quality = positional_quality(attributes, row["position"], [group])
+            manual = manual_positions.get(player_id)
+            position = ", ".join((manual[0], *manual[1])) if manual else row["position"]
+            for group in utils.position_groups(position):
+                quality = positional_quality(attributes, position, [group])
                 if quality is not None:
                     stats.group_quality.setdefault(group, []).append((player_id, quality))
 
@@ -205,13 +208,13 @@ class MetricContext:
     @property
     def is_goalkeeper(self) -> bool:
         """포지션 문자열에 GK가 들어 있으면 골키퍼로 본다."""
-        position = str(self.snapshot.get("position") or "")
+        position = self.position
         return any(token in position for token in config.GOALKEEPER_TOKENS)
 
     @property
     def position(self) -> str:
         """FM 포지션 문자열."""
-        return str(self.snapshot.get("position") or "")
+        return str(self.snapshot.get("effective_position") or self.snapshot.get("position") or "")
 
     @property
     def groups(self) -> list[str]:
@@ -224,6 +227,8 @@ class MetricContext:
 
         여러 자리를 보는 선수는 **가장 잘 하는 자리** 기준으로 평가한다.
         """
+        if self.snapshot.get("manual_primary_position"):
+            return config.POSITION_GROUPS.get(str(self.snapshot["manual_primary_position"]))
         scored = [
             (positional_quality(self.attributes, self.position, [group]), group)
             for group in self.groups
@@ -300,7 +305,7 @@ def quality_score(ctx: MetricContext) -> float | None:
 
     한계: 목록 안에서는 아직 **가중치가 없다** (전부 동등 평균).
     """
-    return positional_quality(ctx.attributes, ctx.position)
+    return positional_quality(ctx.attributes, ctx.position, [ctx.best_group]) if ctx.best_group else positional_quality(ctx.attributes, ctx.position)
 
 
 @metric("ceiling")
@@ -543,10 +548,15 @@ def build_context(
         result = growth_mod.compute_growth(conn, player_id, game_date)
         growth_aggregates = result.aggregates if result else {}
 
+    snapshot_data = dict(snapshot)
+    manual = database.get_player_positions(conn, player_id)
+    if manual:
+        snapshot_data["effective_position"] = ", ".join((manual[0], *manual[1]))
+        snapshot_data["manual_primary_position"] = manual[0]
     return MetricContext(
         player_id=player_id,
         game_date=game_date,
-        snapshot=dict(snapshot),
+        snapshot=snapshot_data,
         attributes=database.get_attributes(conn, player_id, game_date),
         growth=dict(growth_aggregates),
         cohort=cohort,

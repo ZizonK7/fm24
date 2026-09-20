@@ -155,6 +155,10 @@ python scripts/serve.py --port 9000 --no-browser
 > 2027-03-07 → 2027-08-15 사이에 능력치가 **+5** 올랐습니다.
 > 주전과의 격차가 **1.8만큼 좁혀졌습니다**. 역할은 육성 → 로테이션 입니다.
 
+상세의 **실력 그래프**는 게임 내 날짜를 가로축으로 두고 실력 점수를 직선으로
+이어 보여준다. 점에 마우스를 올리면 해당 날짜의 점수와 직전 기록 대비 변화를
+확인할 수 있다.
+
 ### 데이터 불러오기
 
 우측 상단 **데이터 불러오기** 버튼 → 파일을 끌어다 놓거나 선택
@@ -173,6 +177,18 @@ python scripts/serve.py --port 9000 --no-browser
 직접 지정한 값은 **이후 import가 덮어쓰지 않는다.**
 
 이름을 정확히 입력할 일은 없다. 전부 목록에서 고르면 된다.
+
+### 포지션 설정과 추천 스쿼드
+
+선수 상세의 **포지션 설정**에서 주 포지션 하나와 다른 가능 포지션을 직접 고를 수 있다.
+저장한 포지션은 다음 HTML import에도 유지되며, 주 포지션을 기준으로 실력과
+포지션 경쟁 지표를 다시 계산한다. 설정 전에는 FM export의 포지션을 사용한다.
+
+상단 **추천 포메이션** 탭은 선택한 시점의 전체 선수단으로 **4-2-3-1**의
+주전·로테이션·육성 3개 스쿼드를 보여준다. 포지션별 핵심 능력치, 운영 역할,
+육성 스쿼드의 나이를 반영한다. 같은 선수는 한 스쿼드에만 배치하고,
+소화 가능한 선수가 부족한 자리는 비워 둔다. 추천은 저장된 명단이 아니라
+현재 데이터로 매번 계산된다.
 
 ---
 
@@ -309,15 +325,12 @@ python scripts/update.py --file data/raw/270424.html --date 2027-04-24 --roles r
 
 ## 1-2. pfkfks.org/fm24 에 화면을 배포하기
 
-화면 파일을 고쳤을 때만 필요하다. 데이터 동기화와는 별개다.
+`web/static/`을 수정해 이 저장소의 `main`에 push하면 GitHub Actions가
+화면 파일을 `pfkfks-main/public/fm24/`에 복사해 커밋한다. 이어서
+`pfkfks-main`의 기존 Firebase Hosting 배포가 자동으로 실행된다.
+HTML 데이터는 별도로 로컬 앱에서 **Firestore 동기화**를 눌러야 한다.
 
-```powershell
-python scripts/deploy_web.py       # web/static → ../pfkfks-main/public/fm24
-cd ../pfkfks-main
-git add public/fm24 && git commit -m "Update fm24" && git push
-```
-
-push하면 pfkfks-main의 GitHub Actions가 알아서 배포한다.
+수동으로 화면을 복사해야 할 때는 `python scripts/deploy_web.py`를 사용할 수 있다.
 
 **왜 복사하는가:** Firebase Hosting 배포는 **사이트 전체를 교체한다.**
 이 저장소에서 직접 배포하면 pfkfks.org의 나머지(/work, /study, /football…)가

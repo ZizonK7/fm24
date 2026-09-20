@@ -18,6 +18,7 @@ const state = {
   overview: null,
   date: null,
   players: [],
+  recommendation: null,
   filters: { origin: 'signed', age: '21', group: '', role: '', search: '' },
   sort: { key: 'starter_gap', asc: false },
   selectedId: null,
@@ -154,10 +155,35 @@ async function refreshOverview() {
 }
 
 async function refreshSquad() {
-  if (!state.date) { state.players = []; render(); return; }
+  if (!state.date) { state.players = []; state.recommendation = null; render(); renderFormation(); return; }
   const data = await DS.squad(state.date);
   state.players = data.players || [];
+  state.recommendation = data.recommendation || null;
   render();
+  renderFormation();
+}
+
+function renderFormation() {
+  const squads = state.recommendation?.squads;
+  if (!squads) {
+    $('formation-squads').innerHTML = '<p class="muted">추천할 선수 데이터가 없습니다.</p>';
+    return;
+  }
+  const labels = { starter: '주전', rotation: '로테이션', development: '육성' };
+  $('formation-squads').innerHTML = Object.entries(labels).map(([kind, label]) => {
+    const slots = squads[kind] || [];
+    const missing = slots.filter((item) => !item.player).length;
+    return `<section class="formation-card"><h3>${label} 스쿼드</h3>
+      ${missing ? `<p class="muted">배치 가능한 선수가 부족해 ${missing}자리가 비어 있습니다.</p>` : ''}
+      <div class="formation-pitch">${slots.map((item) => {
+        const p = item.player;
+        return `<div class="formation-slot ${p ? '' : 'vacant'}">
+          <span class="slot-name">${item.slot}</span>
+          ${p ? `<button type="button" data-player-id="${escapeHtml(p.player_id)}" title="선수 상세 보기">
+            ${escapeHtml(p.name)} <small>${p.age ?? '–'}세 · ${escapeHtml(p.position)}${p.primary ? '' : ' · 가능 포지션'}</small>
+          </button>` : '<span>선수 없음</span>'}</div>`;
+      }).join('')}</div></section>`;
+  }).join('');
 }
 
 // ── 필터 + 정렬 ────────────────────────────────────────
@@ -199,7 +225,7 @@ function render() {
     return `<tr data-id="${escapeHtml(p.player_id)}" ${p.player_id === state.selectedId ? 'class="selected"' : ''}>
       <td>
         <div class="player-name">${escapeHtml(p.name)}</div>
-        <div class="player-sub">${origin} ${escapeHtml(p.position || '')}</div>
+        <div class="player-sub">${origin} ${escapeHtml([p.primary_position, ...(p.other_positions || [])].filter(Boolean).join(', ') || p.position || '')}</div>
       </td>
       <td class="num">${p.age ?? dash}</td>
       <td>${escapeHtml(p.group_label || '')}</td>
@@ -252,15 +278,17 @@ async function openPlayer(playerId) {
       ? `<span class="tag signed">영입</span> ${escapeHtml(origin.signed_from || '')} ${origin.signed_fee ? money(origin.signed_fee) : '자유이적'}`
       : `<span class="tag youth">유스</span>`,
     escapeHtml(player.nationality || ''),
-    escapeHtml(latest?.position || player.position || ''),
+    escapeHtml(player.primary_position || latest?.position || player.position || ''),
   ].filter(Boolean).join(' · ');
 
   $('drawer-body').innerHTML = [
     renderHeadline(latest),
     renderVerdict(timeline, overall),
+    renderQualityChart(timeline),
     renderTimeline(timeline),
     renderChanges(overall, timeline),
     renderAttributes(attributes),
+    renderPositionPicker(player),
     // 수정은 진실이 있는 로컬에서만. 클라우드는 읽기 전용이다.
     DS.editable ? renderRolePicker(player.player_id, latest) : '',
     DS.editable ? renderOriginPicker(player.player_id, origin) : '',
@@ -269,6 +297,24 @@ async function openPlayer(playerId) {
   $('drawer').hidden = false;
   $('scrim').hidden = false;
   $('drawer-body').scrollTop = 0;
+}
+
+function renderPositionPicker(player) {
+  const options = state.overview?.position_options || [];
+  const primary = player.primary_position || '';
+  const others = player.other_positions || [];
+  if (!options.length) return '';
+  const label = (token) => token.replaceAll('(', ' (');
+  return `<h3>포지션 설정</h3>
+    <p class="muted">FM 포지션: ${escapeHtml(player.position || '–')} · ${player.manual_positions ? '직접 지정한 포지션' : 'FM 데이터에서 가져온 기본값'}</p>
+    ${DS.editable ? `<form id="position-form" data-player="${escapeHtml(player.player_id)}">
+      <label class="field"><span>주 포지션</span><select name="primary" required>
+        ${options.map((token) => `<option value="${escapeHtml(token)}" ${token === primary ? 'selected' : ''}>${escapeHtml(label(token))}</option>`).join('')}
+      </select></label>
+      <span class="field-label">다른 가능 포지션</span>
+      <div class="position-options">${options.map((token) => `<label><input type="checkbox" name="other" value="${escapeHtml(token)}" ${others.includes(token) && token !== primary ? 'checked' : ''} ${token === primary ? 'disabled' : ''}>${escapeHtml(label(token))}</label>`).join('')}</div>
+      <button type="submit" class="btn primary">포지션 저장</button>
+    </form>` : `<p>주 포지션: ${escapeHtml(label(primary) || '–')} · 가능 포지션: ${escapeHtml(others.map(label).join(', ') || '없음')}</p>`}`;
 }
 
 function renderHeadline(latest) {
@@ -310,6 +356,69 @@ function renderVerdict(timeline, overall) {
   return `<h3>판단</h3>
     <p>${first.game_date} → ${last.game_date} 사이에 ${growthText}. ${gapText}.
     역할은 ${roleTag(first.role)} → ${roleTag(last.role)} 입니다.</p>`;
+}
+
+/** 날짜 간격을 유지하며 스냅샷의 실력 점수를 직선으로 잇는다. */
+function renderQualityChart(timeline) {
+  const values = timeline
+    .filter((point) => point.quality !== null && Number.isFinite(Number(point.quality)))
+    .map((point) => ({ date: point.game_date, value: Number(point.quality) }));
+  if (!values.length) return '';
+
+  const width = 520, height = 230;
+  const left = 43, right = 18, top = 24, bottom = 43;
+  const plotWidth = width - left - right, plotHeight = height - top - bottom;
+  const dates = values.map((point) => Date.parse(`${point.date}T00:00:00Z`));
+  const validDates = dates.every(Number.isFinite);
+  const start = validDates ? Math.min(...dates) : 0;
+  const end = validDates ? Math.max(...dates) : values.length - 1;
+  const low = Math.min(...values.map((point) => point.value));
+  const high = Math.max(...values.map((point) => point.value));
+  const padding = Math.max(0.5, (high - low) * 0.2);
+  const yMin = Math.max(0, Math.floor(low - padding));
+  const yMax = Math.min(20, Math.max(yMin + 1, Math.ceil(high + padding)));
+  const xAt = (index) => left + (end === start ? plotWidth / 2 :
+    ((validDates ? dates[index] : index) - start) / (end - start) * plotWidth);
+  const yAt = (value) => top + (yMax - value) / (yMax - yMin) * plotHeight;
+  const coordinates = values.map((point, index) => ({
+    ...point, x: xAt(index), y: yAt(point.value),
+  }));
+  const ticks = [yMin, (yMin + yMax) / 2, yMax];
+  const grid = ticks.map((value) => `<g>
+    <line class="quality-grid" x1="${left}" y1="${yAt(value)}" x2="${width - right}" y2="${yAt(value)}" />
+    <text class="quality-axis" x="${left - 8}" y="${yAt(value) + 4}" text-anchor="end">${value.toFixed(1)}</text>
+  </g>`).join('');
+
+  const labelIndices = values.length <= 4
+    ? values.map((_, index) => index)
+    : [0, Math.floor((values.length - 1) / 2), values.length - 1];
+  const dateLabels = labelIndices.map((index) => `<text class="quality-axis"
+    x="${coordinates[index].x}" y="${height - 12}"
+    text-anchor="${index === 0 && values.length > 1 ? 'start' : index === values.length - 1 ? 'end' : 'middle'}">${escapeHtml(values[index].date.slice(2))}</text>`).join('');
+  const path = coordinates.map((point, index) => `${index ? 'L' : 'M'}${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ');
+  const points = coordinates.map((point, index) => {
+    const previous = coordinates[index - 1];
+    const delta = previous ? point.value - previous.value : null;
+    const detail = delta === null ? '' : ` · 이전 대비 ${delta >= 0 ? '+' : ''}${delta.toFixed(2)}`;
+    return `<circle class="quality-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="5">
+      <title>${escapeHtml(`${point.date} · 실력 ${point.value.toFixed(2)}${detail}`)}</title>
+    </circle>`;
+  }).join('');
+  const change = values.length > 1 ? values.at(-1).value - values[0].value : null;
+  const summary = change === null ? '첫 기록입니다.' :
+    `${values[0].value.toFixed(2)} → ${values.at(-1).value.toFixed(2)} (${change >= 0 ? '+' : ''}${change.toFixed(2)})`;
+
+  return `<section class="quality-chart-section"><h3>실력 그래프</h3>
+    <p class="quality-chart-summary">${summary}</p>
+    <svg class="quality-chart" viewBox="0 0 ${width} ${height}" role="img"
+      aria-label="날짜별 실력 그래프: ${escapeHtml(values.map((point) => `${point.date} ${point.value.toFixed(2)}`).join(', '))}">
+      ${grid}
+      <path class="quality-line" d="${path}" />
+      ${points}
+      ${dateLabels}
+    </svg>
+    <p class="muted quality-chart-note">점에 마우스를 올리면 날짜와 실력 점수를 볼 수 있습니다. 아래 표에서도 정확한 값을 확인할 수 있습니다.</p>
+  </section>`;
 }
 
 function renderTimeline(timeline) {
@@ -515,6 +624,22 @@ async function runSync() {
 
 // ── 이벤트 ─────────────────────────────────────────────
 function bindEvents() {
+  $('tab-players').addEventListener('click', () => {
+    $('players-view').hidden = false;
+    $('formation-view').hidden = true;
+    $('tab-players').classList.add('active');
+    $('tab-formation').classList.remove('active');
+  });
+  $('tab-formation').addEventListener('click', () => {
+    $('players-view').hidden = true;
+    $('formation-view').hidden = false;
+    $('tab-players').classList.remove('active');
+    $('tab-formation').classList.add('active');
+  });
+  $('formation-squads').addEventListener('click', (e) => {
+    const button = e.target.closest('button[data-player-id]');
+    if (button) openPlayer(button.dataset.playerId);
+  });
   $('btn-load').addEventListener('click', openLoadDialog);
   $('btn-sync').addEventListener('click', runSync);
   $('btn-signin').addEventListener('click', () => {
@@ -619,6 +744,33 @@ function bindEvents() {
       await refreshSquad();
       await openPlayer(playerId);
     } catch (err) { toast(err.message); }
+  });
+  $('drawer-body').addEventListener('change', (e) => {
+    const form = e.target.closest('#position-form');
+    if (!form || e.target.name !== 'primary') return;
+    form.querySelectorAll('input[name="other"]').forEach((input) => {
+      if (input.value === e.target.value) input.checked = false;
+      input.disabled = input.value === e.target.value;
+    });
+  });
+  $('drawer-body').addEventListener('submit', async (e) => {
+    if (e.target.id !== 'position-form') return;
+    e.preventDefault();
+    const form = e.target;
+    const primary = form.elements.primary.value;
+    const others = [...form.querySelectorAll('input[name="other"]:checked')]
+      .map((input) => input.value).filter((value) => value !== primary);
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await DS.setPositions(form.dataset.player, primary, others);
+      await refreshSquad();
+      await openPlayer(form.dataset.player);
+      toast('포지션을 저장했습니다.');
+    } catch (err) {
+      toast(err.message);
+      button.disabled = false;
+    }
   });
 }
 

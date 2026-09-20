@@ -12,7 +12,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Mapping
 
-from src import config, database, growth as growth_mod, metrics as metrics_mod, utils
+from src import config, database, formation, growth as growth_mod, metrics as metrics_mod, utils
 
 __all__ = [
     "overview",
@@ -54,6 +54,7 @@ def overview(conn: sqlite3.Connection) -> dict[str, Any]:
         "formula_version": metrics_mod.FORMULA_VERSION,
         "roles": list(config.SQUAD_ROLES),
         "position_groups": config.POSITION_GROUP_LABELS,
+        "position_options": list(config.POSITION_GROUPS),
         "can_compare_growth": len(dates) >= 2,
     }
 
@@ -87,6 +88,7 @@ def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, A
     roles = database.roles_by_player(conn, game_date)
     origins = database.origins_by_player(conn)
     growth_rows = database.growth_by_player(conn, game_date)
+    manual_positions = database.positions_by_player(conn)
 
     players: list[dict[str, Any]] = []
     for row in snapshots:
@@ -95,6 +97,7 @@ def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, A
         origin = origins.get(player_id)
         role = roles.get(player_id)
         group = m.get("best_position_group")
+        primary, others = formation.choices(row["position"], manual_positions.get(player_id))
 
         players.append(
             {
@@ -102,6 +105,9 @@ def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, A
                 "name": row["name"],
                 "age": row["age"],
                 "position": row["position"],
+                "primary_position": primary,
+                "other_positions": others,
+                "manual_positions": player_id in manual_positions,
                 "group": group,
                 "group_label": config.POSITION_GROUP_LABELS.get(group or "", group),
                 "club": row["club"],
@@ -146,7 +152,11 @@ def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, A
         )
 
     players.sort(key=lambda p: (-(p["quality"] or 0), p["name"] or ""))
-    return {"game_date": game_date, "players": players}
+    return {
+        "game_date": game_date,
+        "players": players,
+        "recommendation": formation.recommend(players, database.attributes_by_player(conn, game_date)),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +175,7 @@ def player_detail(conn: sqlite3.Connection, player_id: str) -> dict[str, Any] | 
         return None
 
     origin = database.get_player_origin(conn, player_id)
+    manual_positions = database.get_player_positions(conn, player_id)
     dates = database.snapshot_dates(conn, player_id)
     labels = config.attribute_labels()
 
@@ -244,6 +255,8 @@ def player_detail(conn: sqlite3.Connection, player_id: str) -> dict[str, Any] | 
 
     latest = dates[-1] if dates else None
     attributes = database.get_attributes(conn, player_id, latest) if latest else {}
+    latest_snapshot = database.get_snapshot(conn, player_id, latest) if latest else None
+    primary, others = formation.choices(latest_snapshot["position"] if latest_snapshot else None, manual_positions)
     grouped: dict[str, list[dict[str, Any]]] = {}
     core_keys: set[str] = set()
     best_group: str | None = None
@@ -276,6 +289,9 @@ def player_detail(conn: sqlite3.Connection, player_id: str) -> dict[str, Any] | 
             "birth_date": player["birth_date"],
             "nationality": player["nationality"],
             "position": player["primary_position"],
+            "primary_position": primary,
+            "other_positions": others,
+            "manual_positions": manual_positions is not None,
             "first_seen_date": player["first_seen_date"],
             "last_seen_date": player["last_seen_date"],
             "id_source": player["id_source"],

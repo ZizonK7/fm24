@@ -198,31 +198,17 @@ class TestCssVariables(unittest.TestCase):
         self.assertIn("background", body_block.group(1))
 
 
-class TestDeployedCopy(unittest.TestCase):
-    """pfkfks-main 에 복사해 둔 화면이 원본과 같은지.
+class TestSitePublishing(unittest.TestCase):
+    """FM24 push가 기존 사이트 저장소의 Hosting 배포로 이어지는지 확인한다."""
 
-    화면을 고치고 `scripts/deploy_web.py` 돌리는 걸 잊으면, 로컬은 새 화면인데
-    pfkfks.org/fm24 는 옛 화면이 된다. 조용히 어긋나므로 여기서 잡는다.
-    pfkfks-main 저장소가 옆에 없으면 건너뛴다.
-    """
-
-    def setUp(self) -> None:
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-        import deploy_web  # noqa: PLC0415
-
-        self.deploy_web = deploy_web
-        if not deploy_web.DEFAULT_TARGET.is_dir():
-            self.skipTest(f"배포 폴더가 없습니다: {deploy_web.DEFAULT_TARGET}")
-
-    def test_deployed_copy_is_up_to_date(self) -> None:
-        added, changed, removed = self.deploy_web.plan(
-            self.deploy_web.SOURCE, self.deploy_web.DEFAULT_TARGET
-        )
-        self.assertEqual(
-            (added, changed, removed),
-            ([], [], []),
-            "web/static 과 배포본이 다릅니다. `python scripts/deploy_web.py` 를 실행하세요.",
-        )
+    def test_screen_changes_trigger_site_update(self) -> None:
+        workflow = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "deploy-site.yml"
+        source = workflow.read_text(encoding="utf-8")
+        self.assertIn("web/static/**", source)
+        self.assertIn("repository: ZizonK7/pfkfks-main", source)
+        self.assertIn("secrets.PFKFKS_DEPLOY_KEY", source)
+        self.assertIn("python scripts/deploy_web.py --target site/public/fm24", source)
+        self.assertIn("git -C site push origin HEAD:main", source)
 
 
 class TestRoleLabels(unittest.TestCase):

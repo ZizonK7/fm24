@@ -150,6 +150,33 @@ select:focus-visible, input:focus-visible, button:focus-visible {
 }
 
 main { padding: 16px 20px calc(40px + env(safe-area-inset-bottom, 0px)); }
+.view-tabs { display: flex; width: fit-content; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 18px; }
+.view-tabs .chip { border-radius: 0; }
+.formation-squads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 16px; margin-top: 18px; }
+.formation-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.formation-card h3 { margin: 0 0 10px; color: var(--text); font-size: 15px; }
+.formation-card p { margin: 0 0 10px; }
+.formation-pitch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.formation-slot { min-width: 0; min-height: 75px; padding: 7px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
+.formation-slot .slot-name { display: block; font-weight: 700; color: var(--accent); }
+.formation-slot button { display: block; width: 100%; text-align: left; padding: 2px 0; color: var(--text); background: none; border: 0; cursor: pointer; font: inherit; font-weight: 600; overflow-wrap: anywhere; }
+.formation-slot button:hover { color: var(--accent); }
+.formation-slot small { display: block; color: var(--muted); font-weight: 400; }
+.formation-slot.vacant { border-style: dashed; color: var(--muted); }
+.formation-slot:nth-child(1) { grid-area: 5 / 2 / 6 / 4; }
+.formation-slot:nth-child(2) { grid-area: 4 / 4; }
+.formation-slot:nth-child(3) { grid-area: 4 / 3; }
+.formation-slot:nth-child(4) { grid-area: 4 / 2; }
+.formation-slot:nth-child(5) { grid-area: 4 / 1; }
+.formation-slot:nth-child(6) { grid-area: 3 / 3; }
+.formation-slot:nth-child(7) { grid-area: 3 / 2; }
+.formation-slot:nth-child(8) { grid-area: 2 / 4; }
+.formation-slot:nth-child(9) { grid-area: 2 / 2 / 3 / 4; }
+.formation-slot:nth-child(10) { grid-area: 2 / 1; }
+.formation-slot:nth-child(11) { grid-area: 1 / 2 / 2 / 4; }
+.field-label { display: block; margin: 12px 0 5px; color: var(--muted); font-size: 12px; }
+.position-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 5px; margin-bottom: 12px; }
+.position-options label { display: flex; align-items: center; gap: 5px; padding: 5px; background: var(--surface-2); border-radius: 5px; font-size: 12px; }
 
 /* ── 필터 ───────────────────────────────────────────── */
 .filters {
@@ -255,6 +282,16 @@ table.squad { width: 100%; border-collapse: collapse; min-width: 720px; }
 .stat .k { font-size: 11px; color: var(--muted); }
 .stat .v { font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stat .n { font-size: 11px; color: var(--muted); }
+
+.quality-chart-section { margin-top: 18px; }
+.quality-chart-section h3 { margin-bottom: 3px; }
+.quality-chart-summary { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.quality-chart { display: block; width: 100%; height: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+.quality-grid { stroke: var(--border); stroke-width: 1; }
+.quality-axis { fill: var(--muted); font: 11px -apple-system, "Segoe UI", "Malgun Gothic", system-ui, sans-serif; }
+.quality-line { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.quality-point { fill: var(--surface); stroke: var(--accent); stroke-width: 3; vector-effect: non-scaling-stroke; }
+.quality-chart-note { margin: 6px 0 0; font-size: 11px; }
 
 table.mini { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.mini th, table.mini td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
