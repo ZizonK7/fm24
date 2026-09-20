@@ -1,0 +1,4 @@
+* text=auto
+
+# 배치 파일은 CRLF로 두는 편이 cmd에서 안전하다.
+*.bat text eol=crlf

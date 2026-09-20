@@ -1,0 +1,5 @@
+# FM24 export 원본 HTML을 날짜별로 보관한다.
+# 예: 2027-03-01.html, 2027-08-01.html
+#
+# config.ATTRIBUTE_GROUPS에 능력치를 나중에 추가했을 때
+# 과거 시점까지 소급해서 채우려면 이 파일들을 다시 import해야 한다.

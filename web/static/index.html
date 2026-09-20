@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FM24 Tracker</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<!-- 클라우드(pfkfks.org)에서만 뜨는 로그인 게이트 -->
+<section class="gate" id="auth-gate" hidden>
+  <div class="gate-card">
+    <p class="eyebrow">PFKFKS PRIVATE TOOL</p>
+    <h1>FM24 Tracker</h1>
+    <p class="muted" id="gate-message">로그인 상태를 확인하고 있습니다…</p>
+    <button class="btn primary" id="btn-signin" hidden>Google로 로그인</button>
+  </div>
+</section>
+
+<header class="topbar" id="topbar" hidden>
+  <div class="brand">
+    <strong>FM24 Tracker</strong>
+    <span class="muted" id="db-summary">불러오는 중…</span>
+  </div>
+  <div class="topbar-actions">
+    <label class="field inline">
+      <span>시점</span>
+      <select id="date-select"></select>
+    </label>
+    <button class="btn primary" id="btn-load" hidden>데이터 불러오기</button>
+    <button class="btn" id="btn-sync" hidden>Firestore 동기화</button>
+    <button class="btn ghost" id="btn-signout" hidden>로그아웃</button>
+  </div>
+</header>
+
+<!-- 스냅샷이 하나뿐일 때의 안내 -->
+<div class="banner" id="growth-banner" hidden>
+  <strong>아직 성장을 볼 수 없습니다.</strong>
+  스냅샷이 1개뿐입니다. 게임을 진행한 뒤 같은 화면을 다시 export해서 불러오면,
+  그때부터 능력치 변화가 계산됩니다.
+</div>
+
+<!-- 클라우드에서는 읽기 전용임을 알린다 -->
+<div class="banner info" id="cloud-banner" hidden>
+  <strong>읽기 전용입니다.</strong>
+  이 화면은 내 PC에서 동기화한 결과를 보여줍니다.
+  불러오기와 수정은 로컬 앱에서 하세요. <span id="synced-at"></span>
+</div>
+
+<main id="main" hidden>
+  <!-- ── 필터 ───────────────────────────────────────────── -->
+  <section class="filters" id="filters">
+    <div class="filter-group" role="group" aria-label="출신">
+      <button class="chip active" data-filter="origin" data-value="signed">영입</button>
+      <button class="chip" data-filter="origin" data-value="youth">유스</button>
+      <button class="chip" data-filter="origin" data-value="">전체</button>
+    </div>
+    <div class="filter-group" role="group" aria-label="나이">
+      <button class="chip active" data-filter="age" data-value="21">21세 이하</button>
+      <button class="chip" data-filter="age" data-value="19">19세 이하</button>
+      <button class="chip" data-filter="age" data-value="">전체</button>
+    </div>
+    <label class="field inline">
+      <span>자리</span>
+      <select id="group-select"><option value="">전체</option></select>
+    </label>
+    <label class="field inline">
+      <span>역할</span>
+      <select id="role-select"><option value="">전체</option></select>
+    </label>
+    <label class="field inline grow">
+      <span>검색</span>
+      <input type="search" id="search" placeholder="이름 일부" autocomplete="off">
+    </label>
+    <span class="muted" id="result-count"></span>
+  </section>
+
+  <!-- ── 선수 목록 ──────────────────────────────────────── -->
+  <section class="panel">
+    <table class="squad" id="squad-table">
+      <thead>
+        <tr>
+          <th class="sortable" data-sort="name">선수</th>
+          <th class="sortable num" data-sort="age">나이</th>
+          <th>자리</th>
+          <th class="sortable num" data-sort="rank">경쟁</th>
+          <th class="sortable num" data-sort="quality">실력</th>
+          <th class="sortable num" data-sort="starter_gap">주전까지</th>
+          <th class="sortable num" data-sort="growth_total">성장</th>
+          <th class="sortable num" data-sort="usage">출전</th>
+          <th>역할</th>
+        </tr>
+      </thead>
+      <tbody id="squad-body"></tbody>
+    </table>
+    <p class="empty" id="squad-empty" hidden>조건에 맞는 선수가 없습니다.</p>
+  </section>
+</main>
+
+<!-- ── 선수 상세 (오른쪽 패널) ─────────────────────────── -->
+<aside class="drawer" id="drawer" hidden aria-label="선수 상세">
+  <div class="drawer-head">
+    <div>
+      <h2 id="d-name"></h2>
+      <p class="muted" id="d-sub"></p>
+    </div>
+    <button class="btn ghost" id="drawer-close" aria-label="닫기">✕</button>
+  </div>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>
+<div class="scrim" id="scrim" hidden></div>
+
+<!-- ── 불러오기 모달 ──────────────────────────────────── -->
+<dialog id="load-dialog">
+  <form method="dialog" class="dialog-head">
+    <h2>데이터 불러오기</h2>
+    <button class="btn ghost" value="cancel" aria-label="닫기">✕</button>
+  </form>
+
+  <div class="dialog-body">
+    <div class="dropzone" id="dropzone">
+      <p><strong>FM24 export HTML</strong>을 여기에 끌어다 놓거나</p>
+      <label class="btn">
+        파일 선택
+        <input type="file" id="file-input" accept=".html,.htm" hidden>
+      </label>
+    </div>
+
+    <details id="known-files-wrap">
+      <summary>이미 <code>data/</code> 에 있는 파일에서 고르기</summary>
+      <ul class="file-list" id="file-list"></ul>
+    </details>
+
+    <div id="preview" hidden>
+      <h3>확인</h3>
+      <dl class="preview-grid" id="preview-grid"></dl>
+
+      <label class="field">
+        <span>게임 내 날짜 <em>(FM 세이브 화면의 날짜)</em></span>
+        <input type="date" id="date-input">
+        <small class="muted" id="date-hint"></small>
+      </label>
+
+      <ul class="warnings" id="preview-warnings"></ul>
+    </div>
+
+    <p class="error" id="load-error" hidden></p>
+  </div>
+
+  <div class="dialog-foot">
+    <button class="btn ghost" id="btn-cancel">취소</button>
+    <button class="btn primary" id="btn-import" disabled>가져오기</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

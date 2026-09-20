@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# --- 세이브 데이터는 올리지 않는다 (이 저장소는 public) ---
+# DB는 언제든 원본 HTML로 다시 만들 수 있고, 원본 HTML은 내 FM 세이브의
+# 스쿼드 전체라 공개 저장소에 둘 이유가 없다. 둘 다 내 PC에만 둔다.
+db/*.db
+db/*.db-journal
+data/raw/*.html
+data/*.html
+data/processed/
+
+# 바탕화면 바로가기 생성기가 만드는 것은 저장소 밖(바탕화면)이라 무관.
