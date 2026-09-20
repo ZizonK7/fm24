@@ -8,7 +8,8 @@
  * 규모라, 상태를 하나 두고 통째로 다시 그리는 편이 단순하고 빠르다.
  *
  * 핵심 화면은 "내가 데려온 어린 선수가 성장하고 있고, 주전에 가까워지고
- * 있는가" 하나에 맞춰져 있다. 그래서 기본 필터가 영입 + 21세 이하다.
+ * 있는가" 하나에 맞춰져 있다. 다만 처음 들어왔을 때는 선수단 전체가
+ * 보이는 편이 낫다고 판단해, 기본 필터는 출신·나이 모두 전체다.
  */
 
 import { DS, MODE, signIn, signOut, syncToCloud, watchAuth } from './datasource.js';
@@ -19,7 +20,7 @@ const state = {
   date: null,
   players: [],
   recommendation: null,
-  filters: { origin: 'signed', age: '21', group: '', role: '', search: '' },
+  filters: { origin: '', age: '', group: '', role: '', search: '' },
   sort: { key: 'starter_gap', asc: false },
   selectedId: null,
   pending: null,   // 불러오기 미리보기 결과
