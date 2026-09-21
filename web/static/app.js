@@ -204,11 +204,17 @@ function statusTag(player) {
 
 // ── 필터 + 정렬 ────────────────────────────────────────
 
-/** 상태 필터를 통과하는가. 'squad'=우리 팀만, 'loan'=임대까지, ''=전부. */
+/**
+ * 상태 필터를 통과하는가. 'squad'=우리 팀만, 'loan'=임대까지, ''=전부.
+ *
+ * 상태를 모르면 정상으로 본다. 클라우드에는 이 기능 이전에 동기화한 데이터가
+ * 남아 있어 `status` 가 없는데, 그걸 감추면 목록이 통째로 비어 보인다.
+ */
 function statusAllows(player) {
   const mode = state.filters.status;
-  if (mode === 'squad') return player.status === 'active';
-  if (mode === 'loan') return player.status !== 'released';
+  const status = player.status || 'active';
+  if (mode === 'squad') return status === 'active';
+  if (mode === 'loan') return status !== 'released';
   return true;
 }
 
