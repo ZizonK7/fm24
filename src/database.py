@@ -35,7 +35,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import config
+from . import config, utils
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -55,6 +55,9 @@ __all__ = [
     "upsert_role",
     "snapshot_dates",
     "cohort_snapshots",
+    "departed_snapshots",
+    "parent_club",
+    "set_parent_club",
 ]
 
 SCHEMA_VERSION = 1
@@ -201,6 +204,14 @@ def ensure_schema(conn: sqlite3.Connection) -> list[str]:
             note       TEXT,
             updated_at TEXT,
             PRIMARY KEY (player_id, game_date)
+        );
+
+        /* 시점별 모(母)구단. 임대 나간 선수는 `구단` 이 임대처로 찍히므로,
+           "우리 팀" 이 어디였는지 시점마다 기억해 둬야 판별할 수 있다. */
+        CREATE TABLE IF NOT EXISTS squad_meta (
+            game_date   TEXT PRIMARY KEY,
+            parent_club TEXT,
+            updated_at  TEXT
         );
 
         CREATE TABLE IF NOT EXISTS schema_meta (
@@ -654,6 +665,62 @@ def get_role(conn: sqlite3.Connection, player_id: str, game_date: str) -> str | 
 def cohort_snapshots(conn: sqlite3.Connection, game_date: str) -> list[sqlite3.Row]:
     """같은 날짜의 전체 스쿼드 스냅샷. usage 정규화의 분모로 쓴다."""
     return conn.execute("SELECT * FROM snapshots WHERE game_date = ?", (game_date,)).fetchall()
+
+
+def set_parent_club(conn: sqlite3.Connection, game_date: str, parent_club: str | None) -> None:
+    """그 시점의 모구단을 기록한다. import가 판정한 값을 넣는다."""
+    conn.execute(
+        "INSERT INTO squad_meta (game_date, parent_club, updated_at) VALUES (?, ?, ?)"
+        " ON CONFLICT(game_date) DO UPDATE SET"
+        " parent_club=excluded.parent_club, updated_at=excluded.updated_at",
+        (game_date, parent_club, _now()),
+    )
+
+
+def parent_club(conn: sqlite3.Connection, game_date: str) -> str | None:
+    """그 시점의 모구단. 기록이 없으면 스냅샷에서 계산해 채워 넣는다.
+
+    이 테이블이 생기기 전에 넣은 데이터도 다시 import하지 않고 쓸 수 있도록,
+    없으면 저장된 `구단` 들의 과반으로 역산한다 (import 때와 같은 규칙).
+
+    Returns:
+        모구단 이름. 과반 구단이 없으면 None.
+    """
+    row = conn.execute(
+        "SELECT parent_club FROM squad_meta WHERE game_date = ?", (game_date,)
+    ).fetchone()
+    if row is not None:
+        return row["parent_club"]
+
+    found = utils.majority_club(
+        r["club"] for r in conn.execute(
+            "SELECT club FROM snapshots WHERE game_date = ?", (game_date,)
+        )
+    )
+    set_parent_club(conn, game_date, found)
+    conn.commit()
+    return found
+
+
+def departed_snapshots(conn: sqlite3.Connection, game_date: str) -> list[sqlite3.Row]:
+    """그 시점 명단에서 **사라진** 선수들의 마지막 스냅샷.
+
+    이전에는 있었는데 이 날짜에는 없는 선수다. 방출·이적·계약만료를 FM
+    데이터로 구분할 수는 없고, 여기서는 "없어졌다" 는 사실만 본다.
+    export를 일부만 뽑은 경우에도 똑같이 사라진 것으로 보이므로, 화면에서는
+    판정 근거(그 시점 명단에 없음)를 함께 보여주는 편이 좋다.
+
+    Returns:
+        선수당 한 행. 각자의 **마지막** 스냅샷이며 날짜는 제각각이다.
+    """
+    return conn.execute(
+        "SELECT s.* FROM snapshots s"
+        " JOIN (SELECT player_id, MAX(game_date) AS d FROM snapshots"
+        "        WHERE game_date < ? GROUP BY player_id) last"
+        "   ON last.player_id = s.player_id AND last.d = s.game_date"
+        " WHERE s.player_id NOT IN (SELECT player_id FROM snapshots WHERE game_date = ?)",
+        (game_date, game_date),
+    ).fetchall()
 
 
 def attributes_by_player(conn: sqlite3.Connection, game_date: str) -> dict[str, dict[str, float]]:

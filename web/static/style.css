@@ -248,6 +248,8 @@ table.squad { width: 100%; border-collapse: collapse; min-width: 720px; }
 .tag.fringe { background: var(--surface-2); color: var(--muted); }
 .tag.signed { background: var(--accent-soft); color: var(--accent); }
 .tag.youth { background: var(--surface-2); color: var(--muted); }
+.tag.loan { background: var(--warn-soft); color: var(--warn); }
+.tag.released { background: var(--bad-soft); color: var(--bad); }
 
 .pos { color: var(--good); } .neg { color: var(--bad); }
 .dash { color: var(--muted); }

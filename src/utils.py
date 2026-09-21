@@ -23,6 +23,7 @@ import hashlib
 import re
 import sys
 import unicodedata as _unicodedata
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path as _Path
 from typing import Any, Iterable, NamedTuple, Sequence
@@ -40,6 +41,7 @@ __all__ = [
     "fallback_player_id",
     "infer_date_from_filename",
     "is_missing",
+    "majority_club",
     "parse_appearances",
     "parse_birth_date",
     "parse_date",
@@ -500,6 +502,28 @@ def fallback_player_id(parts: Sequence[str]) -> str:
     joined = "|".join(clean_text(part) for part in parts)
     digest = hashlib.sha1(joined.encode("utf-8")).hexdigest()[:12]
     return f"fb-{digest}"
+
+
+def majority_club(names: Iterable[str]) -> str | None:
+    """구단 이름 목록에서 **과반을 차지하는** 이름을 고른다.
+
+    export 한 장의 모(母)구단을 찾는 데 쓴다. 임대 나간 선수는 `구단` 이
+    임대처로 찍히지만 소수이므로, 과반인 이름이 우리 팀이다.
+
+    과반을 요구하는 이유: 스카우트 결과처럼 구단이 제각각인 export를
+    "우리 스쿼드"로 오인하지 않기 위해서다.
+
+    Args:
+        names: 구단 이름들. 빈 문자열과 None은 무시한다.
+
+    Returns:
+        과반 구단 이름. 과반이 없으면 None.
+    """
+    counter = Counter(cleaned for name in names if (cleaned := clean_text(name)))
+    if not counter:
+        return None
+    club, count = counter.most_common(1)[0]
+    return club if count * 2 > sum(counter.values()) else None
 
 
 def safe_mean(values: Iterable[float]) -> float | None:

@@ -64,11 +64,30 @@ def overview(conn: sqlite3.Connection) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _squad_status(club: str | None, home_club: str | None) -> str:
+    """스냅샷의 `구단` 과 모구단을 비교해 상태를 정한다.
+
+    임대 나간 선수는 `구단` 이 임대처로 찍힌다. 임대로 **와 있는** 선수는
+    구단이 우리 팀으로 찍히므로 여기서 걸러지지 않는데, 의도한 것이다
+    (:data:`src.config.PLAYER_STATUSES` 참고).
+
+    모구단을 모르면(과반 구단이 없는 export 등) 전부 active로 둔다.
+    잘못 임대로 표시해 목록에서 숨기는 것보다 낫다.
+    """
+    if not home_club or not club:
+        return "active"
+    return "loaned_out" if club.strip() != home_club.strip() else "active"
+
+
 def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, Any]:
     """한 시점의 전체 스쿼드를 화면용 행으로 만든다.
 
     필터(영입만 보기, 나이 제한 등)는 클라이언트가 한다. 42명 규모라
     전부 넘겨도 부담이 없고, 필터를 바꿀 때마다 왕복하지 않아도 된다.
+
+    **그 시점 명단에 없는 선수도 함께 담는다** (``status`` 가 ``released``).
+    화면에서 기본으로 숨기더라도, "누가 없어졌는지" 는 목록에서만 알 수 있기
+    때문이다. 이때 지표는 그 선수의 마지막 시점 값이라 최신이 아니다.
 
     Args:
         conn: 연결.
@@ -83,16 +102,32 @@ def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, A
             return {"game_date": None, "players": []}
         game_date = dates[-1]
 
-    snapshots = database.cohort_snapshots(conn, game_date)
-    all_metrics = database.metrics_by_player(conn, game_date)
-    roles = database.roles_by_player(conn, game_date)
     origins = database.origins_by_player(conn)
-    growth_rows = database.growth_by_player(conn, game_date)
     manual_positions = database.positions_by_player(conn)
+    home_club = database.parent_club(conn, game_date)
+
+    # 떠난 선수의 지표는 그 선수의 마지막 시점 것이라, 날짜별로 한 번씩 읽는다.
+    by_date: dict[str, tuple[dict, dict, dict]] = {}
+
+    def lookups(date_iso: str) -> tuple[dict, dict, dict]:
+        if date_iso not in by_date:
+            by_date[date_iso] = (
+                database.metrics_by_player(conn, date_iso),
+                database.roles_by_player(conn, date_iso),
+                database.growth_by_player(conn, date_iso),
+            )
+        return by_date[date_iso]
+
+    # (스냅샷, 상태) 목록. 이 시점 명단에 없는 선수는 마지막 모습으로 붙인다.
+    entries: list[tuple[Any, str]] = [
+        (row, _squad_status(row["club"], home_club)) for row in database.cohort_snapshots(conn, game_date)
+    ]
+    entries += [(row, "released") for row in database.departed_snapshots(conn, game_date)]
 
     players: list[dict[str, Any]] = []
-    for row in snapshots:
+    for row, status in entries:
         player_id = row["player_id"]
+        all_metrics, roles, growth_rows = lookups(row["game_date"])
         m = all_metrics.get(player_id, {})
         origin = origins.get(player_id)
         role = roles.get(player_id)
@@ -112,6 +147,8 @@ def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, A
                 "group_label": config.POSITION_GROUP_LABELS.get(group or "", group),
                 "club": row["club"],
                 "squad_level": row["squad_level"],
+                "status": status,
+                "last_seen_date": row["game_date"],
                 "origin": origin["origin"] if origin else None,
                 "signed_from": origin["signed_from"] if origin else None,
                 "signed_fee": _num(origin["signed_fee"], 0) if origin else None,
@@ -152,10 +189,12 @@ def squad(conn: sqlite3.Connection, game_date: str | None = None) -> dict[str, A
         )
 
     players.sort(key=lambda p: (-(p["quality"] or 0), p["name"] or ""))
+    # 임대 나갔거나 떠난 선수는 지금 쓸 수 없으므로 추천에서 뺀다.
+    available = [p for p in players if p["status"] == "active"]
     return {
         "game_date": game_date,
         "players": players,
-        "recommendation": formation.recommend(players, database.attributes_by_player(conn, game_date)),
+        "recommendation": formation.recommend(available, database.attributes_by_player(conn, game_date)),
     }
 
 
@@ -256,6 +295,18 @@ def player_detail(conn: sqlite3.Connection, player_id: str) -> dict[str, Any] | 
     latest = dates[-1] if dates else None
     attributes = database.get_attributes(conn, player_id, latest) if latest else {}
     latest_snapshot = database.get_snapshot(conn, player_id, latest) if latest else None
+
+    # 상태: DB의 최신 시점에 이 선수가 없으면 떠난 것으로 본다.
+    all_dates = database.distinct_game_dates(conn)
+    if latest is None:
+        status = "active"
+    elif all_dates and latest < all_dates[-1]:
+        status = "released"
+    else:
+        status = _squad_status(
+            latest_snapshot["club"] if latest_snapshot else None,
+            database.parent_club(conn, latest),
+        )
     primary, others = formation.choices(latest_snapshot["position"] if latest_snapshot else None, manual_positions)
     grouped: dict[str, list[dict[str, Any]]] = {}
     core_keys: set[str] = set()
@@ -294,6 +345,8 @@ def player_detail(conn: sqlite3.Connection, player_id: str) -> dict[str, Any] | 
             "manual_positions": manual_positions is not None,
             "first_seen_date": player["first_seen_date"],
             "last_seen_date": player["last_seen_date"],
+            "status": status,
+            "club": latest_snapshot["club"] if latest_snapshot else None,
             "id_source": player["id_source"],
         },
         "origin": {

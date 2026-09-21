@@ -73,6 +73,27 @@ class TestDomReferences(unittest.TestCase):
         declared = set(re.findall(r"(\w+):", state_block.group(1)))
         self.assertTrue(keys <= declared, f"state.filters에 없는 필터: {keys - declared}")
 
+    def test_default_chip_matches_default_filter_state(self) -> None:
+        # 켜져 있는 칩과 state.filters의 초깃값이 다르면, 화면은 A를 가리키는데
+        # 목록은 B로 걸러진다. 눈으로는 알아채기 어려운 어긋남이다.
+        state_block = re.search(r"filters:\s*\{([^}]*)\}", JS)
+        self.assertIsNotNone(state_block)
+        defaults = dict(re.findall(r"(\w+):\s*'([^']*)'", state_block.group(1)))
+
+        for group in re.findall(r'<div class="filter-group".*?</div>', HTML, re.DOTALL):
+            active = re.findall(r'<button class="chip active" data-filter="(\w+)" data-value="([^"]*)"', group)
+            self.assertEqual(len(active), 1, f"켜진 칩이 하나가 아닙니다: {group[:80]}")
+            key, value = active[0]
+            with self.subTest(filter=key):
+                self.assertEqual(defaults.get(key), value)
+
+    def test_tag_classes_used_by_js_are_styled(self) -> None:
+        # class="tag xxx" 인데 CSS에 .tag.xxx가 없으면 꼬리표가 밋밋하게 나온다.
+        used = set(re.findall(r'class="tag (\w+)"', JS))
+        for name in used:
+            with self.subTest(tag=name):
+                self.assertIn(f".tag.{name}", CSS_RULES)
+
     def test_sort_keys_are_real_squad_fields(self) -> None:
         # 표 헤더의 data-sort는 /api/squad 행의 키여야 한다.
         from web import api  # noqa: F401  (존재 확인용)

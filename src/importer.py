@@ -16,7 +16,6 @@ import datetime as _dt
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections import Counter
 from typing import Any, Iterable, Mapping, Sequence
 
 from . import config, database, growth as growth_mod, metrics as metrics_mod, parser, utils
@@ -45,16 +44,8 @@ def detect_parent_club(records: Sequence[Any]) -> str | None:
     Returns:
         가장 흔한 구단 이름. 판단할 수 없으면 None.
     """
-    counter = Counter(
-        (record.fields.get("club") or "").strip()
-        for record in records
-        if (record.fields.get("club") or "").strip()
-    )
-    if not counter:
-        return None
-    club, count = counter.most_common(1)[0]
     # 과반이 아니면 "내 스쿼드"라고 보기 어렵다 (스카우트 결과 export 등).
-    return club if count * 2 > sum(counter.values()) else None
+    return utils.majority_club(record.fields.get("club") or "" for record in records)
 
 
 def classify_origin(
@@ -208,6 +199,8 @@ def import_export(
 
     # --- 1단계: players + snapshots + attributes ------------------------
     parent_club = detect_parent_club(result.players)
+    # 임대 판정은 나중에 조회할 때도 필요하므로 시점별로 남겨 둔다.
+    database.set_parent_club(conn, date_iso, parent_club)
     if parent_club is None:
         summary.warnings.append(
             "모구단을 판단하지 못했습니다 (구단이 제각각인 export?). "

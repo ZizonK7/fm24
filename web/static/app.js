@@ -10,6 +10,9 @@
  * 핵심 화면은 "내가 데려온 어린 선수가 성장하고 있고, 주전에 가까워지고
  * 있는가" 하나에 맞춰져 있다. 다만 처음 들어왔을 때는 선수단 전체가
  * 보이는 편이 낫다고 판단해, 기본 필터는 출신·나이 모두 전체다.
+ *
+ * 상태 필터만 예외다. 임대 나간 선수와 떠난 선수는 지금 내가 쓸 수 있는
+ * 자원이 아니므로 기본에서는 감춘다.
  */
 
 import { DS, MODE, signIn, signOut, syncToCloud, watchAuth } from './datasource.js';
@@ -20,7 +23,7 @@ const state = {
   date: null,
   players: [],
   recommendation: null,
-  filters: { origin: '', age: '', group: '', role: '', search: '' },
+  filters: { origin: '', age: '', status: 'squad', group: '', role: '', search: '' },
   sort: { key: 'starter_gap', asc: false },
   selectedId: null,
   pending: null,   // 불러오기 미리보기 결과
@@ -187,12 +190,41 @@ function renderFormation() {
   }).join('');
 }
 
+/** 상태 꼬리표. 정상(active)이면 아무것도 붙이지 않는다 — 대부분이 정상이라 소음이 된다. */
+function statusTag(player) {
+  if (player.status === 'loaned_out') {
+    const where = player.club ? `${player.club}(으)로 ` : '';
+    return `<span class="tag loan" title="${escapeHtml(where)}임대 나가 있습니다.">임대</span>`;
+  }
+  if (player.status === 'released') {
+    return `<span class="tag released" title="${escapeHtml(player.last_seen_date || '')} 명단을 마지막으로 사라졌습니다. 방출·이적·계약만료를 FM 데이터로는 구분할 수 없고, 아래 숫자는 그때 기준입니다.">방출</span>`;
+  }
+  return '';
+}
+
 // ── 필터 + 정렬 ────────────────────────────────────────
+
+/** 상태 필터를 통과하는가. 'squad'=우리 팀만, 'loan'=임대까지, ''=전부. */
+function statusAllows(player) {
+  const mode = state.filters.status;
+  if (mode === 'squad') return player.status === 'active';
+  if (mode === 'loan') return player.status !== 'released';
+  return true;
+}
+
+/**
+ * 조건에 맞는 선수들.
+ *
+ * 상태 필터를 마지막에 적용하고 걸러진 선수를 따로 돌려준다. 몇 명이
+ * 감춰졌는지 화면에 적어주기 위해서다 — 조용히 빠지면 "왜 안 보이지" 가 된다.
+ *
+ * @returns {{rows: object[], hidden: object[]}}
+ */
 function visiblePlayers() {
   const f = state.filters;
   const needle = f.search.trim().toLowerCase();
 
-  const rows = state.players.filter((p) => {
+  const matched = state.players.filter((p) => {
     if (f.origin && p.origin !== f.origin) return false;
     if (f.age && (p.age === null || p.age > Number(f.age))) return false;
     if (f.group && p.group !== f.group) return false;
@@ -200,6 +232,7 @@ function visiblePlayers() {
     if (needle && !(p.name || '').toLowerCase().includes(needle)) return false;
     return true;
   });
+  const rows = matched.filter(statusAllows);
 
   const { key, asc } = state.sort;
   rows.sort((a, b) => {
@@ -210,12 +243,22 @@ function visiblePlayers() {
     if (typeof x === 'string') return asc ? x.localeCompare(y) : y.localeCompare(x);
     return asc ? x - y : y - x;
   });
-  return rows;
+  return { rows, hidden: matched.filter((p) => !statusAllows(p)) };
+}
+
+/** "3명 · 임대 2 숨김" 처럼, 상태 때문에 빠진 인원을 알린다. */
+function hiddenNote(hidden) {
+  if (!hidden.length) return '';
+  const labels = { loaned_out: '임대', released: '방출' };
+  const counts = new Map();
+  hidden.forEach((p) => counts.set(p.status, (counts.get(p.status) || 0) + 1));
+  const parts = [...counts].map(([status, n]) => `${labels[status] || status} ${n}`);
+  return ` · ${parts.join(' · ')} 숨김`;
 }
 
 // ── 목록 렌더 ──────────────────────────────────────────
 function render() {
-  const rows = visiblePlayers();
+  const { rows, hidden } = visiblePlayers();
   const body = $('squad-body');
 
   body.innerHTML = rows.map((p) => {
@@ -226,7 +269,7 @@ function render() {
     return `<tr data-id="${escapeHtml(p.player_id)}" ${p.player_id === state.selectedId ? 'class="selected"' : ''}>
       <td>
         <div class="player-name">${escapeHtml(p.name)}</div>
-        <div class="player-sub">${origin} ${escapeHtml([p.primary_position, ...(p.other_positions || [])].filter(Boolean).join(', ') || p.position || '')}</div>
+        <div class="player-sub">${origin} ${statusTag(p)} ${escapeHtml([p.primary_position, ...(p.other_positions || [])].filter(Boolean).join(', ') || p.position || '')}</div>
       </td>
       <td class="num">${p.age ?? dash}</td>
       <td>${escapeHtml(p.group_label || '')}</td>
@@ -240,7 +283,7 @@ function render() {
   }).join('');
 
   $('squad-empty').hidden = rows.length > 0;
-  $('result-count').textContent = `${rows.length}명`;
+  $('result-count').textContent = `${rows.length}명${hiddenNote(hidden)}`;
 
   document.querySelectorAll('.squad th.sortable').forEach((th) => {
     const active = th.dataset.sort === state.sort.key;
@@ -278,6 +321,7 @@ async function openPlayer(playerId) {
     origin.origin === 'signed'
       ? `<span class="tag signed">영입</span> ${escapeHtml(origin.signed_from || '')} ${origin.signed_fee ? money(origin.signed_fee) : '자유이적'}`
       : `<span class="tag youth">유스</span>`,
+    statusTag(player),
     escapeHtml(player.nationality || ''),
     escapeHtml(player.primary_position || latest?.position || player.position || ''),
   ].filter(Boolean).join(' · ');

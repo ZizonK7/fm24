@@ -80,6 +80,15 @@ PLAYING_TIME_ROLE_MAP: Final[Mapping[str, str]] = {
 #: 선수 출신 구분. "내가 데려온 선수" 를 가려내기 위한 것.
 PLAYER_ORIGINS: Final[tuple[str, ...]] = ("signed", "youth", "unknown")
 
+#: 한 시점에서 선수가 스쿼드에 어떻게 걸려 있는가.
+#:
+#:   active     — 우리 팀에 있다. 임대로 **와 있는** 선수도 여기 포함한다
+#:                (FM에서 구단이 우리 팀으로 찍히고, 굳이 구분하지 않는다).
+#:   loaned_out — 임대 나가 있다. `구단` 이 모구단과 다르면 이렇게 본다.
+#:   released   — 그 시점 명단에서 사라졌다. 방출/이적/계약만료를 FM 데이터로
+#:                구분할 수는 없으므로 "없어졌다" 는 사실만 표시한다.
+PLAYER_STATUSES: Final[tuple[str, ...]] = ("active", "loaned_out", "released")
+
 #: `최적 역할` 컬럼이 여러 개일 때, 역할명(전진형 플레이메이커)과
 #: 임무(지원/공격/수비)를 구분하기 위한 임무 값 집합.
 DUTY_VALUES: Final[frozenset[str]] = frozenset(
