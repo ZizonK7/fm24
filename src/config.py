@@ -443,8 +443,10 @@ KIND_COLUMNS: Final[Mapping[str, tuple[tuple[str, str], ...]]] = {
 #: snapshots 테이블에 정규화해서 넣을 필드들.
 #:
 #: 여기 없는 컬럼이 버려지는 게 아니라, **전부 raw_json에 남는다.**
-#: 자주 조회하게 되는 필드가 생기면 여기 한 줄 추가하고
-#: ``scripts/update.py --migrate`` 를 한 번 돌리면 컬럼이 추가된다.
+#: 자주 조회하게 되는 필드가 생기면 여기 한 줄 추가하면 된다. 컬럼은
+#: :func:`src.database.ensure_schema` 가 붙이며, import·서버 실행·재계산
+#: 때마다 불리므로 따로 돌릴 명령은 없다. 다만 **과거 스냅샷의 그 컬럼은
+#: 비어 있다** — 값을 채우려면 해당 HTML을 다시 import해야 한다.
 FIELD_SPECS: Final[tuple[FieldSpec, ...]] = (
     # --- 신원 -------------------------------------------------------------
     FieldSpec("name", ("이름",)),

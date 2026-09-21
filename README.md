@@ -408,6 +408,7 @@ python scripts/recompute.py
 football_manager/
   FM24 트래커.bat                 # ← 더블클릭해서 실행
   바탕화면에 바로가기 만들기.bat    # ← 한 번만 실행
+  CLAUDE.md                       # Claude Code용 요약 (구조·규칙·명령)
   data/
     raw/            # export 원본 HTML 보관 (소급 재import용)
     processed/      # 임시 분석 산출물
@@ -640,7 +641,16 @@ pytest
 
 `data/제목없음.html` 이 있으면 실제 export로도 검증한다 (없으면 skip).
 
-현재 상태: **189 tests, 모두 통과** (Python 3.12.10, 표준 라이브러리만 사용).
+현재 상태: **214 tests, 모두 통과** (표준 라이브러리만 사용).
+
+파일 하나만 돌리려면 `-p`, 케이스 하나만 돌리려면 `-k` 를 쓴다.
+`tests/` 는 패키지가 아니라서 `python -m unittest tests.test_status` 형태는
+`_fixtures` import에서 깨진다.
+
+```powershell
+python -m unittest discover -s tests -p "test_status.py"
+python -m unittest discover -s tests -p "test_status.py" -k test_missing_player_is_released
+```
 
 웹 테스트는 실제로 서버를 띄워 업로드 → 미리보기 → import 전 과정을 HTTP로
 확인한다. 프론트엔드는 브라우저 없이 정적 검사만 한다 — `app.js` 가 찾는
