@@ -177,10 +177,12 @@ main { padding: 16px 20px calc(40px + env(safe-area-inset-bottom, 0px)); }
   background: var(--surface-2); background: color-mix(in srgb, var(--surface-2) 94%, transparent); border: 1px solid var(--border);
   border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12); font-size: 12px;
 }
-.formation-slot .slot-name { display: block; font-weight: 700; color: var(--accent); }
-.formation-slot button { display: block; width: 100%; text-align: left; padding: 1px 0; color: var(--text); background: none; border: 0; cursor: pointer; font: inherit; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
+.formation-slot .slot-name { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 700; color: var(--accent); }
+.formation-slot button { display: block; width: 100%; min-width: 0; overflow: hidden; text-align: left; padding: 1px 0; color: var(--text); background: none; border: 0; cursor: pointer; font: inherit; font-weight: 600; line-height: 1.2; }
 .formation-slot button:hover { color: var(--accent); }
-.formation-slot small { display: block; color: var(--muted); font-size: 10px; line-height: 1.1; font-weight: 400; }
+.formation-slot .player-name,
+.formation-slot small { display: block; width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.formation-slot small { color: var(--muted); font-size: 10px; line-height: 1.1; font-weight: 400; }
 .formation-slot.vacant { border-style: dashed; color: var(--muted); }
 .field-label { display: block; margin: 12px 0 5px; color: var(--muted); font-size: 12px; }
 .position-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 5px; margin-bottom: 12px; }

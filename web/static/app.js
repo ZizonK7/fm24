@@ -209,7 +209,7 @@ function renderFormation() {
         return `<div class="formation-slot ${p ? '' : 'vacant'}" style="--slot-x:${x}%;--slot-y:${y}%">
           <span class="slot-name">${item.slot}</span>
           ${p ? `<button type="button" data-player-id="${escapeHtml(p.player_id)}" title="${escapeHtml(`${p.name} · ${p.age ?? '–'}세 · ${p.position}${p.primary ? '' : ' · 가능 포지션'}`)}">
-            ${escapeHtml(p.name)} <small>${p.age ?? '–'}세 · ${escapeHtml(p.position)}${p.primary ? '' : ' · 가능 포지션'}</small>
+            <span class="player-name">${escapeHtml(p.name)}</span><small>${p.age ?? '–'}세 · ${escapeHtml(p.position)}${p.primary ? '' : ' · 가능 포지션'}</small>
           </button>` : '<span>선수 없음</span>'}</div>`;
       }).join('')}</div></section>`;
   }).join('');

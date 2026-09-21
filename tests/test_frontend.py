@@ -77,6 +77,19 @@ class TestDomReferences(unittest.TestCase):
         self.assertIn("left: var(--slot-x)", CSS)
         self.assertNotIn(".formation-slot:nth-child", CSS_RULES)
 
+    def test_formation_card_text_stays_on_single_lines(self) -> None:
+        self.assertIn('<span class="player-name">${escapeHtml(p.name)}</span>', APP_JS)
+        for selector in (
+            r"\.formation-slot \.slot-name",
+            r"\.formation-slot \.player-name,\s*\.formation-slot small",
+        ):
+            match = re.search(rf"{selector}\s*\{{([^}}]*)\}}", CSS_RULES)
+            self.assertIsNotNone(match, f"포메이션 카드 텍스트 규칙이 없습니다: {selector}")
+            rule = match.group(1)
+            self.assertIn("overflow: hidden", rule)
+            self.assertIn("white-space: nowrap", rule)
+            self.assertIn("text-overflow: ellipsis", rule)
+
     def test_filter_keys_match_state_shape(self) -> None:
         # 칩의 data-filter 값은 state.filters의 키여야 한다.
         keys = set(re.findall(r'data-filter="([^"]+)"', HTML))
