@@ -152,28 +152,36 @@ select:focus-visible, input:focus-visible, button:focus-visible {
 main { padding: 16px 20px calc(40px + env(safe-area-inset-bottom, 0px)); }
 .view-tabs { display: flex; width: fit-content; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 18px; }
 .view-tabs .chip { border-radius: 0; }
+.formation-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .formation-squads { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 16px; margin-top: 18px; }
 .formation-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
 .formation-card h3 { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 .formation-card p { margin: 0 0 10px; }
-.formation-pitch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.formation-slot { min-width: 0; min-height: 75px; padding: 7px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; }
+.formation-pitch {
+  position: relative; aspect-ratio: 68 / 92; overflow: hidden;
+  border: 1px solid var(--border); border-color: color-mix(in srgb, var(--good) 38%, var(--border)); border-radius: 10px;
+  background: var(--good-soft);
+  background:
+    linear-gradient(to bottom, transparent 49.7%, rgba(255,255,255,.42) 49.8% 50.2%, transparent 50.3%),
+    repeating-linear-gradient(to bottom, color-mix(in srgb, var(--good-soft) 78%, var(--surface)) 0 10%, color-mix(in srgb, var(--good-soft) 55%, var(--surface)) 10% 20%);
+}
+.formation-pitch::after {
+  content: ""; position: absolute; z-index: 0; left: 37%; top: 43%; width: 26%; aspect-ratio: 1;
+  border: 1px solid rgba(255,255,255,.5); border-radius: 50%; pointer-events: none;
+}
+.formation-slot {
+  --slot-x: 50%;
+  --slot-y: 50%;
+  position: absolute; z-index: 1; left: var(--slot-x); top: var(--slot-y); transform: translate(-50%, -50%);
+  width: min(19%, 92px); min-width: 0; height: clamp(44px, 14%, 58px); padding: 5px; overflow: hidden;
+  background: var(--surface-2); background: color-mix(in srgb, var(--surface-2) 94%, transparent); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.12); font-size: 12px;
+}
 .formation-slot .slot-name { display: block; font-weight: 700; color: var(--accent); }
-.formation-slot button { display: block; width: 100%; text-align: left; padding: 2px 0; color: var(--text); background: none; border: 0; cursor: pointer; font: inherit; font-weight: 600; overflow-wrap: anywhere; }
+.formation-slot button { display: block; width: 100%; text-align: left; padding: 1px 0; color: var(--text); background: none; border: 0; cursor: pointer; font: inherit; font-weight: 600; line-height: 1.2; overflow-wrap: anywhere; }
 .formation-slot button:hover { color: var(--accent); }
-.formation-slot small { display: block; color: var(--muted); font-weight: 400; }
+.formation-slot small { display: block; color: var(--muted); font-size: 10px; line-height: 1.1; font-weight: 400; }
 .formation-slot.vacant { border-style: dashed; color: var(--muted); }
-.formation-slot:nth-child(1) { grid-area: 5 / 2 / 6 / 4; }
-.formation-slot:nth-child(2) { grid-area: 4 / 4; }
-.formation-slot:nth-child(3) { grid-area: 4 / 3; }
-.formation-slot:nth-child(4) { grid-area: 4 / 2; }
-.formation-slot:nth-child(5) { grid-area: 4 / 1; }
-.formation-slot:nth-child(6) { grid-area: 3 / 3; }
-.formation-slot:nth-child(7) { grid-area: 3 / 2; }
-.formation-slot:nth-child(8) { grid-area: 2 / 4; }
-.formation-slot:nth-child(9) { grid-area: 2 / 2 / 3 / 4; }
-.formation-slot:nth-child(10) { grid-area: 2 / 1; }
-.formation-slot:nth-child(11) { grid-area: 1 / 2 / 2 / 4; }
 .field-label { display: block; margin: 12px 0 5px; color: var(--muted); font-size: 12px; }
 .position-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 5px; margin-bottom: 12px; }
 .position-options label { display: flex; align-items: center; gap: 5px; padding: 5px; background: var(--surface-2); border-radius: 5px; font-size: 12px; }

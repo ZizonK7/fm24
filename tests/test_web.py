@@ -288,9 +288,18 @@ class TestQueryEndpoints(WebTestCase):
         self.assertTrue(row["manual_positions"])
         self.assertEqual(row["group"], "ST")
         self.assertEqual(after["recommendation"]["formation"], "4-2-3-1")
+        self.assertEqual(
+            [item["id"] for item in after["recommendation"]["formations"]],
+            ["4-2-3-1", "4-3-3 DM", "4-4-2", "3-4-2-1"],
+        )
         picks = [slot["player"]["player_id"] for squad in after["recommendation"]["squads"].values()
                  for slot in squad if slot["player"]]
         self.assertEqual(len(picks), len(set(picks)))
+        for recommendation in after["recommendation"]["formations"]:
+            formation_picks = [slot["player"]["player_id"]
+                               for squad in recommendation["squads"].values()
+                               for slot in squad if slot["player"]]
+            self.assertEqual(len(formation_picks), len(set(formation_picks)))
         detail = self.get("/api/player?id=29221846")
         self.assertEqual(detail["player"]["primary_position"], "ST(C)")
 

@@ -65,6 +65,13 @@ class TestDomReferences(unittest.TestCase):
         self.assertIn("data-value=", HTML)
         self.assertIn("data-sort=", HTML)
 
+    def test_formation_selector_and_coordinates_are_data_driven(self) -> None:
+        self.assertIn('id="formation-select"', HTML)
+        self.assertIn("recommendation?.formations", APP_JS)
+        self.assertIn("--slot-x:", APP_JS)
+        self.assertIn("left: var(--slot-x)", CSS)
+        self.assertNotIn(".formation-slot:nth-child", CSS_RULES)
+
     def test_filter_keys_match_state_shape(self) -> None:
         # 칩의 data-filter 값은 state.filters의 키여야 한다.
         keys = set(re.findall(r'data-filter="([^"]+)"', HTML))

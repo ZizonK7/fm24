@@ -1,4 +1,4 @@
-"""Position choices and 4-2-3-1 squad suggestions."""
+"""Position choices and data-driven squad formation suggestions."""
 
 from __future__ import annotations
 
@@ -6,19 +6,71 @@ from typing import Any, Mapping, Sequence
 
 from . import config, metrics, utils
 
-SLOTS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("GK", ("GK",)),
-    ("RB", ("D(R)", "WB(R)")),
-    ("RCB", ("D(C)",)),
-    ("LCB", ("D(C)",)),
-    ("LB", ("D(L)", "WB(L)")),
-    ("RDM", ("DM", "DM(C)", "M(C)")),
-    ("LDM", ("DM", "DM(C)", "M(C)")),
-    ("RW", ("AM(R)", "M(R)")),
-    ("AM", ("AM(C)",)),
-    ("LW", ("AM(L)", "M(L)")),
-    ("ST", ("ST", "ST(C)")),
-)
+Slot = tuple[str, tuple[str, ...], int, int]
+
+DEFAULT_FORMATION = "4-2-3-1"
+
+# Coordinates are percentages on a vertical pitch: the opponent's goal is at
+# the top and our goalkeeper is at the bottom.  Keeping them beside the
+# eligibility rules makes the backend payload the single source of truth for
+# both assignment and presentation.
+FORMATIONS: dict[str, tuple[Slot, ...]] = {
+    "4-2-3-1": (
+        ("GK", ("GK",), 50, 92),
+        ("RB", ("D(R)", "WB(R)"), 86, 76),
+        ("RCB", ("D(C)",), 62, 76),
+        ("LCB", ("D(C)",), 38, 76),
+        ("LB", ("D(L)", "WB(L)"), 14, 76),
+        ("RDM", ("DM", "DM(C)", "M(C)"), 62, 57),
+        ("LDM", ("DM", "DM(C)", "M(C)"), 38, 57),
+        ("RW", ("AM(R)", "M(R)"), 84, 34),
+        ("AM", ("AM(C)",), 50, 39),
+        ("LW", ("AM(L)", "M(L)"), 16, 34),
+        ("ST", ("ST", "ST(C)"), 50, 13),
+    ),
+    "4-3-3 DM": (
+        ("GK", ("GK",), 50, 92),
+        ("RB", ("D(R)", "WB(R)"), 86, 76),
+        ("RCB", ("D(C)",), 62, 76),
+        ("LCB", ("D(C)",), 38, 76),
+        ("LB", ("D(L)", "WB(L)"), 14, 76),
+        ("DM", ("DM", "DM(C)", "M(C)"), 50, 60),
+        ("RCM", ("M(C)", "DM(C)", "DM"), 66, 43),
+        ("LCM", ("M(C)", "DM(C)", "DM"), 34, 43),
+        ("RW", ("AM(R)", "M(R)"), 84, 25),
+        ("LW", ("AM(L)", "M(L)"), 16, 25),
+        ("ST", ("ST", "ST(C)"), 50, 13),
+    ),
+    "4-4-2": (
+        ("GK", ("GK",), 50, 92),
+        ("RB", ("D(R)", "WB(R)"), 86, 76),
+        ("RCB", ("D(C)",), 62, 76),
+        ("LCB", ("D(C)",), 38, 76),
+        ("LB", ("D(L)", "WB(L)"), 14, 76),
+        ("RM", ("M(R)", "AM(R)", "WB(R)"), 88, 52),
+        ("RCM", ("M(C)", "DM(C)", "DM"), 64, 55),
+        ("LCM", ("M(C)", "DM(C)", "DM"), 36, 55),
+        ("LM", ("M(L)", "AM(L)", "WB(L)"), 12, 52),
+        ("RST", ("ST", "ST(C)"), 64, 17),
+        ("LST", ("ST", "ST(C)"), 36, 17),
+    ),
+    "3-4-2-1": (
+        ("GK", ("GK",), 50, 92),
+        ("RCB", ("D(C)",), 73, 73),
+        ("CB", ("D(C)",), 50, 73),
+        ("LCB", ("D(C)",), 27, 73),
+        ("RWB", ("WB(R)", "M(R)", "D(R)"), 88, 54),
+        ("RCM", ("M(C)", "DM(C)", "DM"), 62, 57),
+        ("LCM", ("M(C)", "DM(C)", "DM"), 38, 57),
+        ("LWB", ("WB(L)", "M(L)", "D(L)"), 12, 54),
+        ("RAM", ("AM(R)", "AM(C)", "M(R)"), 64, 34),
+        ("LAM", ("AM(L)", "AM(C)", "M(L)"), 36, 34),
+        ("ST", ("ST", "ST(C)"), 50, 13),
+    ),
+}
+
+# Compatibility for code that imported the original fixed slot list.
+SLOTS = tuple((name, eligible) for name, eligible, _, _ in FORMATIONS[DEFAULT_FORMATION])
 
 
 def choices(fm_position: str | None, manual: tuple[str, list[str]] | None) -> tuple[str | None, list[str]]:
@@ -87,16 +139,17 @@ def _assignment(scores: list[list[float]]) -> list[int | None]:
     return result
 
 
-def recommend(
+def _recommend_squads(
     players: Sequence[Mapping[str, Any]],
     attributes: Mapping[str, Mapping[str, float]],
-) -> dict[str, Any]:
+    slots_definition: Sequence[Slot],
+) -> dict[str, list[dict[str, Any]]]:
     """Build disjoint starter, rotation and development elevens."""
     available = list(players)
-    result: dict[str, Any] = {"formation": "4-2-3-1", "squads": {}}
+    squads: dict[str, list[dict[str, Any]]] = {}
     for squad_type in ("starter", "rotation", "development"):
         scores: list[list[float]] = []
-        for _, eligible in SLOTS:
+        for _, eligible, _, _ in slots_definition:
             row: list[float] = []
             for player in available:
                 primary = player.get("primary_position")
@@ -125,20 +178,46 @@ def recommend(
         assigned = _assignment(scores)
         used: set[str] = set()
         slots: list[dict[str, Any]] = []
-        for (slot, eligible), index in zip(SLOTS, assigned):
+        for (slot, eligible, x, y), index in zip(slots_definition, assigned):
             if index is None:
-                slots.append({"slot": slot, "player": None})
+                slots.append({"slot": slot, "x": x, "y": y, "player": None})
                 continue
             player = available[index]
             token = player["primary_position"] if player["primary_position"] in eligible else next(
                 token for token in player["other_positions"] if token in eligible
             )
             used.add(str(player["player_id"]))
-            slots.append({"slot": slot, "player": {
+            slots.append({"slot": slot, "x": x, "y": y, "player": {
                 "player_id": player["player_id"], "name": player["name"], "age": player["age"],
                 "position": token, "primary": token == player["primary_position"],
                 "recommendation_score": round(scores[len(slots)][index], 2),
             }})
-        result["squads"][squad_type] = slots
+        squads[squad_type] = slots
         available = [player for player in available if str(player["player_id"]) not in used]
-    return result
+    return squads
+
+
+def recommend(
+    players: Sequence[Mapping[str, Any]],
+    attributes: Mapping[str, Mapping[str, float]],
+) -> dict[str, Any]:
+    """Build recommendations for every supported formation.
+
+    ``formation`` and ``squads`` retain the original API contract for older
+    clients.  New clients use ``formations`` to switch locally without another
+    request.
+    """
+    formations = [
+        {
+            "id": formation_id,
+            "label": formation_id,
+            "squads": _recommend_squads(players, attributes, slots),
+        }
+        for formation_id, slots in FORMATIONS.items()
+    ]
+    default = next(item for item in formations if item["id"] == DEFAULT_FORMATION)
+    return {
+        "formation": DEFAULT_FORMATION,
+        "squads": default["squads"],
+        "formations": formations,
+    }

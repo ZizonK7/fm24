@@ -23,6 +23,7 @@ const state = {
   date: null,
   players: [],
   recommendation: null,
+  formation: null,
   filters: { origin: '', age: '', status: 'squad', group: '', role: '', search: '' },
   sort: { key: 'starter_gap', asc: false },
   selectedId: null,
@@ -163,27 +164,51 @@ async function refreshSquad() {
   const data = await DS.squad(state.date);
   state.players = data.players || [];
   state.recommendation = data.recommendation || null;
+  const formations = state.recommendation?.formations || [];
+  if (!formations.some((item) => item.id === state.formation)) {
+    state.formation = state.recommendation?.formation || formations[0]?.id || null;
+  }
   render();
   renderFormation();
 }
 
 function renderFormation() {
-  const squads = state.recommendation?.squads;
-  if (!squads) {
+  const recommendation = state.recommendation;
+  const formations = recommendation?.formations?.length
+    ? recommendation.formations
+    : (recommendation?.squads ? [{
+      id: recommendation.formation || '4-2-3-1',
+      label: recommendation.formation || '4-2-3-1',
+      squads: recommendation.squads,
+    }] : []);
+  if (!formations.length) {
+    state.formation = null;
+    $('formation-name').textContent = '–';
+    $('formation-select').innerHTML = '';
     $('formation-squads').innerHTML = '<p class="muted">추천할 선수 데이터가 없습니다.</p>';
     return;
   }
+  const selected = formations.find((item) => item.id === state.formation) || formations[0];
+  state.formation = selected.id;
+  $('formation-name').textContent = selected.label;
+  $('formation-select').innerHTML = formations.map((item) => (
+    `<option value="${escapeHtml(item.id)}">${escapeHtml(item.label)}</option>`
+  )).join('');
+  $('formation-select').value = selected.id;
+  const squads = selected.squads;
   const labels = { starter: '주전', rotation: '로테이션', development: '육성' };
   $('formation-squads').innerHTML = Object.entries(labels).map(([kind, label]) => {
     const slots = squads[kind] || [];
     const missing = slots.filter((item) => !item.player).length;
     return `<section class="formation-card"><h3>${label} 스쿼드</h3>
       ${missing ? `<p class="muted">배치 가능한 선수가 부족해 ${missing}자리가 비어 있습니다.</p>` : ''}
-      <div class="formation-pitch">${slots.map((item) => {
+      <div class="formation-pitch" aria-label="${escapeHtml(selected.label)} ${label} 배치">${slots.map((item) => {
         const p = item.player;
-        return `<div class="formation-slot ${p ? '' : 'vacant'}">
+        const x = Math.max(0, Math.min(100, Number(item.x) || 50));
+        const y = Math.max(0, Math.min(100, Number(item.y) || 50));
+        return `<div class="formation-slot ${p ? '' : 'vacant'}" style="--slot-x:${x}%;--slot-y:${y}%">
           <span class="slot-name">${item.slot}</span>
-          ${p ? `<button type="button" data-player-id="${escapeHtml(p.player_id)}" title="선수 상세 보기">
+          ${p ? `<button type="button" data-player-id="${escapeHtml(p.player_id)}" title="${escapeHtml(`${p.name} · ${p.age ?? '–'}세 · ${p.position}${p.primary ? '' : ' · 가능 포지션'}`)}">
             ${escapeHtml(p.name)} <small>${p.age ?? '–'}세 · ${escapeHtml(p.position)}${p.primary ? '' : ' · 가능 포지션'}</small>
           </button>` : '<span>선수 없음</span>'}</div>`;
       }).join('')}</div></section>`;
@@ -690,6 +715,10 @@ function bindEvents() {
   $('formation-squads').addEventListener('click', (e) => {
     const button = e.target.closest('button[data-player-id]');
     if (button) openPlayer(button.dataset.playerId);
+  });
+  $('formation-select').addEventListener('change', (e) => {
+    state.formation = e.target.value;
+    renderFormation();
   });
   $('btn-load').addEventListener('click', openLoadDialog);
   $('btn-sync').addEventListener('click', runSync);

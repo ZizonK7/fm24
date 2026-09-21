@@ -55,7 +55,13 @@
     <button class="chip" id="tab-formation" type="button">추천 포메이션</button>
   </nav>
   <section id="formation-view" hidden>
-    <h2>추천 포메이션 <span class="muted">4-2-3-1</span></h2>
+    <div class="formation-heading">
+      <h2>추천 포메이션 <span class="muted" id="formation-name">4-2-3-1</span></h2>
+      <label class="field inline">
+        <span>포메이션</span>
+        <select id="formation-select" aria-label="추천 포메이션 선택"></select>
+      </label>
+    </div>
     <p class="muted">선택한 시점의 전체 선수단을 기준으로 주전, 로테이션, 육성 스쿼드를 추천합니다. 선수는 세 스쿼드에서 중복되지 않습니다.</p>
     <div id="formation-squads" class="formation-squads"></div>
   </section>
