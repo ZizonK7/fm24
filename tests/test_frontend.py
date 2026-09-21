@@ -44,6 +44,11 @@ def html_ids() -> set[str]:
 
 
 class TestDomReferences(unittest.TestCase):
+    def test_favicon_is_declared_and_present(self) -> None:
+        match = re.search(r'<link rel="icon" href="([^"]+)"', HTML)
+        self.assertIsNotNone(match, "파비콘 선언이 없습니다")
+        self.assertTrue((STATIC / match.group(1).lstrip("./")).is_file())
+
     def test_every_dollar_lookup_exists_in_html(self) -> None:
         referenced = set(re.findall(r"\$\('([^']+)'\)", JS))
         missing = referenced - html_ids()
